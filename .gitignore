@@ -1,0 +1,16 @@
+# Dataset
+data/
+
+# Model Checkpoints and Outputs
+saved_models/
+*.pth
+*.pt
+
+# Python Environment and Cache
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# OS Files
+.DS_Store
