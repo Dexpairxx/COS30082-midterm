@@ -1,29 +1,12 @@
 #!/bin/bash
 
-# Auto-launch in tmux if not already inside a tmux session
-if [ -z "$TMUX" ]; then
-    echo "==================================================="
-    echo "   Launching Pipeline in Background (tmux)        "
-    echo "==================================================="
-    echo "Session Name: cos30082_train"
-    echo "To view progress later, type:"
-    echo "    tmux attach -t cos30082_train"
-    echo ""
-    
-    # Kill existing session if it exists to avoid conflicts
-    tmux kill-session -t cos30082_train 2>/dev/null || true
-    
-    # Start a detached tmux session running this very script
-    tmux new-session -d -s cos30082_train "bash \"$0\"; bash"
-    echo "✅ Pipeline is now running in the background!"
-    echo "You can safely close this terminal."
-    exit 0
-fi
-
-# Exit on error (This part only runs INSIDE the tmux session)
+# Exit on error
 set -e
 
-# Define directories
+# Define directories relative to this script's location
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+cd "$SCRIPT_DIR"
+
 BASE_DIR=$(pwd)
 DATA_DIR="$BASE_DIR/data/train"
 SAVE_DIR="$BASE_DIR/saved_models"

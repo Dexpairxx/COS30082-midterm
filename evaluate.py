@@ -83,7 +83,7 @@ def plot_confusion_matrix(y_true, y_pred, class_names, title, save_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, required=True)
-    parser.add_argument('--save_dir', type=str, default='../saved_models')
+    parser.add_argument('--save_dir', type=str, default='saved_models')
     args = parser.parse_args()
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')

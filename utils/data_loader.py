@@ -1,43 +1,36 @@
 import os
+import copy
 import torch
 from torchvision import datasets, transforms
-from torch.utils.data import DataLoader, random_split, Dataset
+from torch.utils.data import DataLoader, random_split, Dataset, Subset
 from PIL import Image
 
-class CustomImageDataset(Dataset):
+
+class SubsetWithTransform(Dataset):
     """
-    Custom Dataset for loading images from subfolders. 
-    (Matches the structure of the provided 'train' folder which contains subfolders like 'Amphibia', 'Animalia', etc.)
+    A wrapper around a Subset that applies a specific transform,
+    without modifying the original dataset's transform.
+    This avoids the bug where train and val share the same transform object.
     """
-    def __init__(self, root_dir, transform=None):
-        self.root_dir = root_dir
+    def __init__(self, subset, transform):
+        self.subset = subset
         self.transform = transform
-        self.classes = sorted(
-            [d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, d))]
-        )
-        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}
-        
-        self.samples = []
-        for class_name in self.classes:
-            class_dir = os.path.join(root_dir, class_name)
-            for f in os.listdir(class_dir):
-                if f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    self.samples.append((os.path.join(class_dir, f), self.class_to_idx[class_name]))
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.subset)
 
     def __getitem__(self, idx):
-        img_path, label = self.samples[idx]
-        image = Image.open(img_path).convert("RGB")
+        img, label = self.subset[idx]
+        # At this point, img is a PIL Image (because we set dataset.transform = None)
         if self.transform:
-            image = self.transform(image)
-        return image, label
+            img = self.transform(img)
+        return img, label
 
 
 def get_data_loaders(data_dir, batch_size=32, validation_split=0.2, num_workers=4, image_size=224):
     """
     Creates train and validation dataloaders, including data augmentation.
+    Uses SubsetWithTransform to safely apply different transforms to train and val sets.
     """
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Directory {data_dir} does not exist. Please place the 'train' folder there.")
@@ -45,6 +38,7 @@ def get_data_loaders(data_dir, batch_size=32, validation_split=0.2, num_workers=
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
+    # Strong Data Augmentation for the Train set to combat overfitting
     train_transforms = transforms.Compose([
         transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)),
         transforms.RandomHorizontalFlip(),
@@ -54,6 +48,7 @@ def get_data_loaders(data_dir, batch_size=32, validation_split=0.2, num_workers=
         transforms.Normalize(mean=mean, std=std)
     ])
 
+    # Validation Set: Only resizing and normalizing
     val_transforms = transforms.Compose([
         transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
@@ -62,12 +57,11 @@ def get_data_loaders(data_dir, batch_size=32, validation_split=0.2, num_workers=
 
     # Check if data_dir contains subfolders (like 'Amphibia', 'Animalia')
     subdirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
-    
+
     if len(subdirs) > 0:
-        # Structure 1: Train folder contains class subfolders (what you showed in image 2)
         print("Detected class subdirectories inside train folder.")
-        # We can just use standard ImageFolder because it already handles this
-        full_dataset = datasets.ImageFolder(root=data_dir)
+        # Load WITHOUT any transform first — raw PIL images
+        full_dataset = datasets.ImageFolder(root=data_dir, transform=None)
         class_names = full_dataset.classes
     else:
         raise ValueError(
@@ -79,25 +73,25 @@ def get_data_loaders(data_dir, batch_size=32, validation_split=0.2, num_workers=
     val_size = int(total_size * validation_split)
     train_size = total_size - val_size
 
-    train_dataset, val_dataset = random_split(
-        full_dataset, 
+    # Split with a fixed seed for reproducibility (same split every run)
+    train_subset, val_subset = random_split(
+        full_dataset,
         [train_size, val_size],
         generator=torch.Generator().manual_seed(42)
     )
 
-    train_dataset.dataset.transform = train_transforms
-    
-    import copy
-    val_dataset_transformed = copy.deepcopy(val_dataset)
-    val_dataset_transformed.dataset.transform = val_transforms
+    # Wrap each subset with its own transform — no shared state
+    train_dataset = SubsetWithTransform(train_subset, train_transforms)
+    val_dataset = SubsetWithTransform(val_subset, val_transforms)
 
+    # Create DataLoaders
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, 
+        train_dataset, batch_size=batch_size, shuffle=True,
         num_workers=num_workers, pin_memory=True
     )
 
     val_loader = DataLoader(
-        val_dataset_transformed, batch_size=batch_size, shuffle=False, 
+        val_dataset, batch_size=batch_size, shuffle=False,
         num_workers=num_workers, pin_memory=True
     )
 
@@ -108,6 +102,7 @@ def get_data_loaders(data_dir, batch_size=32, validation_split=0.2, num_workers=
     print(f"Classes: {class_names}")
 
     return train_loader, val_loader, class_names
+
 
 if __name__ == "__main__":
     print("Testing DataLoader script...")
