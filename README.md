@@ -1,3 +1,3 @@
 # mditerm
 
-cos30082
+cos30082 - trinh nhan kiet

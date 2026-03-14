@@ -120,7 +120,7 @@ def main():
     
     # 3. Training Setup
     criterion = nn.CrossEntropyLoss()
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
     
     os.makedirs(args.save_dir, exist_ok=True)
     best_model_path = os.path.join(args.save_dir, f"best_{args.model}_model.pth")
